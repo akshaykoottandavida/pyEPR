@@ -603,7 +603,8 @@ class QuantumAnalysis(object):
                           fock_trunc: int = None,
                           print_result: bool = True,
                           junctions: List = None,
-                          modes: List[int] = None):
+                          modes: List[int] = None,
+                          return_ef=False):
         # TODO avoide analyzing a previously analyzed variation
         '''
         Core analysis function to call!
@@ -675,12 +676,20 @@ class QuantumAnalysis(object):
         CHI_O1 = divide_diagonal_by_2(CHI_O1)   # Make the diagonals alpha
 
         # Numerical diag
+        chi_ef=None
         if cos_trunc is not None:
+          if not return_ef :
             f1_ND, CHI_ND = epr_numerical_diagonalization(freqs_hfss,
                                                           Ljs,
                                                           PHI_zpf,
                                                           cos_trunc=cos_trunc,
                                                           fock_trunc=fock_trunc)
+          else :
+            f1_ND, CHI_ND, chi_ef, f_gf= epr_numerical_diagonalization(freqs_hfss,
+                                                          Ljs,
+                                                          PHI_zpf,
+                                                          cos_trunc=cos_trunc,
+                                                          fock_trunc=fock_trunc,return_ef=True)
         else:
             f1_ND, CHI_ND = None, None
 
@@ -699,6 +708,11 @@ class QuantumAnalysis(object):
             variation, _renorm_pj=self._renorm_pj, print_=print_result)
         result['_Pm_norm'] = _temp['Pm_norm']
         result['_Pm_cap_norm'] = _temp['Pm_cap_norm']
+        #####
+        # including ef transition in the simulation
+        result['chi_ef'] = chi_ef
+        result['f_gf'] = f_gf
+        #####
 
         # just propagate
         result['hfss_variables'] = self._hfss_variables[variation]
@@ -955,12 +969,12 @@ class QuantumAnalysis(object):
             s = df.loc[pd.IndexSlice[:, m], n].unstack(1)[m]
             return s
 
-    def get_frequencies(self, swp_variable='variation', numeric=True, variations: list = None):
+    def get_frequencies(self, swp_variable='variation', numeric=False, variations: list = None):
         """return as multiindex data table
             index: eigenmode label
             columns: variation label
         """
-        label = 'f_1' if numeric else 'f_ND'
+        label = 'f_ND' if numeric else 'f_1'
         return self.results.vs_variations(label, vs=swp_variable, to_dataframe=True, variations=variations)
 
     def get_quality_factors(self, swp_variable='variation', variations: list = None):

@@ -138,7 +138,9 @@ class ProjectInfo(object):
         self.project_name = project_name
         self.design_name = design_name
         self.setup_name = setup_name
-
+        
+        print(self.project_path)
+        print(self.project_name)
         # HFSS desgin: describe junction parameters
         # TODO: introduce modal labels
         self.junctions = Dict()  # See above for help

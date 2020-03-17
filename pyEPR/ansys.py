@@ -2822,7 +2822,8 @@ def load_ansys_project(proj_name: str, project_path: str = None, extension: str 
         # Checks
         assert project_path.is_dir(), "ERROR! project_path is not a valid directory \N{loudly crying face}.\
             Check the path, and especially \\ charecters."
-
+        
+        #print(proj_name)# + extension)
         project_path /= project_path / Path(proj_name + extension)
 
         if (project_path).is_file():

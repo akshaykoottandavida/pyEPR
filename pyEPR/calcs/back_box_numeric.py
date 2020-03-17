@@ -43,7 +43,7 @@ def epr_numerical_diagonalization(freqs, Ljs, ϕzpf,
              cos_trunc=8,
              fock_trunc=9,
              use_1st_order=False,
-             return_H=False):
+             return_ef=False):
     '''
     Numerical diagonalizaiton for pyEPR. Ask Zlatko for details.
 
@@ -64,11 +64,16 @@ def epr_numerical_diagonalization(freqs, Ljs, ϕzpf,
 
     Hs = black_box_hamiltonian(freqs * 1E9, Ljs.astype(np.float), fluxQ*ϕzpf,
                  cos_trunc, fock_trunc, individual=use_1st_order)
-    f_ND, χ_ND, _, _ = make_dispersive(
-        Hs, fock_trunc, ϕzpf, freqs, use_1st_order=use_1st_order)
-    χ_ND = -1*χ_ND * 1E-6  # convert to MHz, and flip sign so that down shift is positive
-
-    return (f_ND, χ_ND, Hs) if return_H else (f_ND, χ_ND)
+    f_ND, χ_ND, ef_chi, f_gf, _, _ = make_dispersive(
+        Hs, fock_trunc, ϕzpf, freqs, use_1st_order=use_1st_order,include_ef=return_ef)
+    
+    χ_ND = χ_ND * 1E-6  # convert to MHz
+    
+    if return_ef :
+      ef_chi = ef_chi * 1E-6
+      return (f_ND, χ_ND, ef_chi, f_gf)
+    else :
+      return (f_ND, χ_ND)
 
 
 
@@ -131,7 +136,7 @@ def black_box_hamiltonian(fs, ljs, fzpfs, cos_trunc=5, fock_trunc=8, individual=
 bbq_hmt = black_box_hamiltonian
 
 def make_dispersive(H, fock_trunc, fzpfs=None, f0s=None, chi_prime=False,
-                    use_1st_order=False):
+                    use_1st_order=False, include_ef=False):
     r"""
     Input: Hamiltonian Matrix.
         Optional: phi_zpfs and normal mode frequncies, f0s.
@@ -219,7 +224,8 @@ def make_dispersive(H, fock_trunc, fzpfs=None, f0s=None, chi_prime=False,
                 return (s.dag() * s2[1]).norm()
             return max(zip(evals, evecs), key=distance)
 
-    f1s = [closest_state_to(fock_state_on({i: 1}))[0] for i in range(N)]
+    f1s = [closest_state_to(fock_state_on({i:1}))[0] for i in range(N)]
+    
     chis = [[0]*N for _ in range(N)]
     chips = [[0]*N for _ in range(N)]
     for i in range(N):
@@ -241,11 +247,41 @@ def make_dispersive(H, fock_trunc, fzpfs=None, f0s=None, chi_prime=False,
                 chip = (ev - (f1s[i] + 2*f1s[j]) - 2 * chis[i][j])
                 chips[i][j] = chip
                 chips[j][i] = chip
+    
+    #######
+    # Author  : Akshay Koottandavida
+    # Code to include the e-f transition of the qubit & calculate chi with the f-level
+    #######
+    
+    
+    if include_ef :
+      
+      # find the qubit index :
+      alphas = np.array([np.absolute(chis[i][i]) for i in range(N)])
+      qubit_index = np.where(alphas == np.amax(alphas))[0][0]
+      
+      freq_gf = closest_state_to(fock_state_on({qubit_index:2}))[0]
+            
+      chi_ef = []
+      temp = [i for i in range(N)]
+      temp.remove(qubit_index)
+ 
+      for i in temp:
+        d = {i:0 for i in range(N)}  # put 0 photons in each mode & 2 photons in the transmon
+        d[qubit_index] = 2
+        d[i] += 1      # put 1 photon in each mode except the transmon
+        fs = fock_state_on(d)
+        ev, evec = closest_state_to(fs)
+        chi = ev - (f1s[i] + freq_gf)
+        chi_ef.append(chi)     
 
     if chi_prime:
-        return np.array(f1s), np.array(chis), np.array(chips), np.array(fzpfs), np.array(f0s)
+        return np.array(f1s), np.array(chis),  np.array(chips), np.array(fzpfs), np.array(f0s)
     else:
-        return np.array(f1s), np.array(chis), np.array(fzpfs), np.array(f0s)
+      if include_ef :
+        return np.array(f1s), np.array(chis), np.array(chi_ef), np.array([freq_gf]), np.array(fzpfs), np.array(f0s)
+      else :
+        return np.array(f1s), np.array(chis), None, None, np.array(fzpfs), np.array(f0s)
 
 
 def black_box_hamiltonian_nq(freqs, zmat, ljs, cos_trunc=6, fock_trunc=8, show_fit=False):
